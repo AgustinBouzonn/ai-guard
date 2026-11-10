@@ -1,0 +1,40 @@
+{
+  "tier0": { "budget_ms": 300, "timeout_ms": 10000, "mem_mb": 150 },
+  "tier1": { "budget_ms": 3000, "timeout_ms": 60000, "mem_mb": 0 },
+  "max_workers": 0,
+  "min_free_mb": 0,
+  "queue_wait_ms": 15000,
+  "hard_cap_factor": 1.5,
+  "low_priority": true,
+  "report": { "max_errors": 30, "max_per_file": 6, "max_msg_chars": 240, "warnings": false },
+  "ts": { "lint": "auto", "syntax": "auto", "types": "auto", "tests": "auto", "test_args": [] },
+  "python": { "lint": "auto", "types": "auto", "tests": "auto", "dmypy_idle_sec": 900, "daemon_max_rss_mb": 1024 },
+  "go": { "vet": "auto", "tests": "auto", "rdeps": true },
+  "rust": { "check": "auto", "tests": "auto", "all_targets": false },
+  "cpp": { "syntax": "auto" },
+  "overrides": {
+    "ts.types": { "mem_mb": 1536 },
+    "rs.test": { "mem_mb": 2048, "timeout_ms": 120000 }
+  },
+  "enable": [],
+  "disable": [],
+  "steps": [
+    {
+      "id": "ts.typed-lint",
+      "tier": 1,
+      "phase": 0,
+      "langs": ["ts"],
+      "cmd": ["npx", "--no-install", "oxlint", "--type-aware", "-f", "unix", "--quiet", "{files}"],
+      "parser": "oxlint",
+      "mem_mb": 1024
+    }
+  ],
+  "tier2": {
+    "trigger": "on_defer",
+    "sync": "git-ref",
+    "remote": "origin",
+    "ref_prefix": "refs/aiguard",
+    "command": ["gh", "workflow", "run", "ai-guard-tier2.yml", "-f", "sha={sha}", "-f", "ref={ref}"],
+    "status_command": ["gh", "run", "list", "--workflow", "ai-guard-tier2.yml", "--limit", "3"]
+  }
+}

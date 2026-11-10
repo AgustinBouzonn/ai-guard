@@ -1,0 +1,83 @@
+# Drop-in sections for an existing pyproject.toml: merge them, keep your own [project] table.
+# Toolchain: uv (env + runner) + ruff (lint/format) + mypy daemon or ty (types) + pytest-testmon (affected tests).
+
+[project]
+name = "your-package"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = []
+
+# ---- uv --------------------------------------------------------------------------------------
+# `uv sync --frozen` installs exactly the lock; `uv run --no-sync <tool>` skips the lock check that
+# plain `uv run` repeats on every call. AI-Guard calls the tools in .venv directly (no wrapper at all).
+[dependency-groups]
+dev = [
+  "ruff>=0.17",
+  "pytest>=9",
+  "pytest-testmon>=2.3",
+  "mypy>=2.4",   # ships dmypy, the persistent daemon
+  "ty",          # beta: single native binary, no daemon needed; AI-Guard prefers it when [tool.mypy] is absent
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+# ---- ruff: replaces flake8 + isort + pyupgrade (and black through `ruff format`) ----------------
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+# Excludes also apply to files passed explicitly, which is how a delta-based runner calls ruff.
+force-exclude = true
+respect-gitignore = true
+extend-exclude = ["migrations", "build", "dist", "node_modules", ".aiguard"]
+cache-dir = ".aiguard/cache/ruff"
+
+[tool.ruff.lint]
+# Errors that break at import or run time, real bug patterns, import order. Layout belongs to the formatter.
+select = ["E4", "E7", "E9", "F", "B", "I", "UP", "SIM", "PLE", "RUF100"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---- pytest ----------------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+norecursedirs = [".git", ".venv", "node_modules", "build", "dist", ".aiguard"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+# Affected-tests mode is requested per call (`pytest --testmon`, which is what AI-Guard runs): it must not
+# live in addopts, or CI would silently stop running the full suite.
+# pytest-xdist: every worker is a whole interpreter with its own imports. On a laptop use `-n 2`, never
+# `-n auto`; keep `-n auto` for the remote tier.
+
+# ---- mypy (AI-Guard talks to it through dmypy when this table exists) ----------------------------
+[tool.mypy]
+python_version = "3.11"
+files = ["src", "tests"]
+exclude = ['^build/', '^dist/']
+incremental = true
+# One SQLite file instead of thousands of small JSON files: far fewer file operations on NTFS and on
+# WSL2's /mnt/c, where each one is slow.
+sqlite_cache = true
+cache_dir = ".aiguard/cache/mypy"
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+
+# ---- ty (alternative to mypy: delete [tool.mypy] to make AI-Guard choose it) ----------------------
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.src]
+exclude = ["build", "dist", "migrations"]
+
+# ---- pyright (optional; it has no command-line daemon, AI-Guard runs it on the changed files) ------
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/node_modules", "**/__pycache__", "build", "dist", ".venv"]
+typeCheckingMode = "standard"
+pythonVersion = "3.11"

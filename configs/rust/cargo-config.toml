@@ -1,0 +1,39 @@
+# Copy to <repo>/.cargo/config.toml (or ~/.cargo/config.toml for every project).
+
+[build]
+# rustc processes cargo may run at once. Each one can hold 0.5-2 GB on a large crate, so this is the
+# main RAM lever: the default is one per logical core.
+jobs = 4
+# Compilation cache. It only stores crates compiled WITHOUT incremental mode: registry dependencies
+# locally, and everything on the remote tier (which sets CARGO_INCREMENTAL=0).
+# Requires sccache on PATH (cargo install sccache --locked); delete the line if you do not install it.
+rustc-wrapper = "sccache"
+
+[profile.dev]
+# File and line in backtraces, without full DWARF: less to generate, less to link, smaller target/.
+debug = "line-tables-only"
+# Workspace crates are rebuilt from the incremental cache after each edit.
+incremental = true
+
+[profile.dev.package."*"]
+# Dependencies are never stepped through: no debug info for them at all.
+debug = false
+
+[profile.release]
+# Remote tier. One codegen unit per crate would be the fastest binary, but it serialises LLVM;
+# keep the default unless you ship from this profile.
+debug = false
+
+[target.x86_64-unknown-linux-gnu]
+# Rust 1.90+ already links with its bundled LLD on this target. mold is faster on very large link
+# steps; enable it only if it is installed:
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.x86_64-pc-windows-msvc]
+# LLD shipped with rustup instead of MSVC's link.exe.
+linker = "rust-lld.exe"
+
+[term]
+# Stable, parseable output for tools that read cargo's messages.
+color = "never"

@@ -1,0 +1,81 @@
+# Copy to .github/workflows/ai-guard-tier2.yml on the DEFAULT branch (workflow_dispatch only sees it there).
+#
+# ai-guard pushes a snapshot of the working tree to refs/aiguard/<id> and then runs, from aiguard.json:
+#   "tier2": { "command": ["gh", "workflow", "run", "ai-guard-tier2.yml", "-f", "sha={sha}", "-f", "ref={ref}"] }
+#
+# Template: adjust the build steps to the project. Not executed as part of AI-Guard's own test suite.
+name: ai-guard-tier2
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Snapshot commit pushed by ai-guard
+        required: true
+        type: string
+      ref:
+        description: Snapshot ref (refs/aiguard/<id>), deleted when the run ends
+        required: false
+        type: string
+
+# A newer snapshot from the same person makes the older run pointless.
+concurrency:
+  group: ai-guard-tier2-${{ github.actor }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # only to delete the snapshot ref
+
+jobs:
+  full-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Remote caches: nothing here is rebuilt if an identical input was built before, by anyone.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      CARGO_INCREMENTAL: "0" # incremental artefacts are not cacheable; sccache/rust caches need this off
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.sha }}
+
+      - uses: actions/setup-node@v6
+        if: hashFiles('package.json') != ''
+        with:
+          node-version: 22
+          cache: npm
+      - name: JS/TS build, bundle and tests
+        if: hashFiles('package.json') != ''
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          npm test
+
+      - name: Python tests (full suite, all cores)
+        if: hashFiles('pyproject.toml') != ''
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          uv sync --frozen
+          uv run --no-sync pytest -q
+
+      - uses: actions/setup-go@v6
+        if: hashFiles('go.mod') != ''
+        with:
+          go-version-file: go.mod
+      - name: Go build (links every binary) and tests
+        if: hashFiles('go.mod') != ''
+        run: |
+          go build ./...
+          go test ./...
+
+      - name: Rust release build (codegen + link) and tests
+        if: hashFiles('Cargo.toml') != ''
+        run: |
+          cargo build --release --locked
+          cargo test --locked
+
+      - name: Delete the snapshot ref
+        if: always() && inputs.ref != ''
+        run: git push origin --delete "${{ inputs.ref }}"

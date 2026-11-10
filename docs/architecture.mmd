@@ -1,0 +1,25 @@
+flowchart TD
+    A["AI agent edits files"] --> B["ai-guard check"]
+    B --> C["git status --porcelain<br/>delta: staged + unstaged + untracked"]
+    C --> D{"any sources?<br/>TS / Py / Go / Rust / C++"}
+    D -- no --> OK0["OK, no tool is launched"]
+    D -- yes --> T0["TIER 0 - the delta only, in parallel<br/>Biome or Oxlint (esbuild when there is no linter), Ruff, gofmt -e, rustfmt --check, clang -fsyntax-only<br/>target 300 ms, 150 MB per step"]
+    T0 -- errors --> F["compact FAIL, exit 1<br/>goes back to the fix prompt"]
+    T0 -- clean --> ADM{"free worker, and<br/>free RAM - step reservation >= system reserve ?"}
+    ADM -- "no (up to queue_wait_ms)" --> Q["queue"]
+    Q --> ADM
+    ADM -- "no, the wait ran out" --> DEF["step deferred"]
+    ADM -- yes --> T1A["TIER 1 phase 0 - incremental<br/>tsc/tsgo --incremental, dmypy or ty,<br/>go vet + importers, cargo check"]
+    T1A -- errors --> F
+    T1A -- clean --> T1B["TIER 1 phase 1 - affected unit tests<br/>vitest related, pytest --testmon,<br/>go test, cargo test -p"]
+    T1B -- errors --> F
+    T1A -. "tree RSS > budget, OS cap,<br/>timeout or low free RAM on the machine" .-> KILL["kill the process tree"]
+    T1B -. "same, or blast radius > limit" .-> KILL
+    KILL --> DEF
+    T1B -- clean --> PASS["OK, exit 0"]
+    DEF --> EXIT4["DEFERRED, exit 4"]
+    EXIT4 --> POL{"tier2.trigger"}
+    PASS --> POL
+    POL -- "on_defer / on_pass / --tier2" --> T2["TIER 2 - detached worker<br/>git snapshot of the tree without touching index or HEAD,<br/>push refs/aiguard/ID with the delta only, or rsync"]
+    T2 --> REM["remote runner: full build, link, E2E<br/>with a distributed cache"]
+    REM --> ST["ai-guard tier2 wait / status"]

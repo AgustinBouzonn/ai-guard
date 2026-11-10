@@ -1,0 +1,15 @@
+# ai-guard's own state when it is run inside this repository
+.aiguard/
+aiguard.bench.json
+
+# build outputs: binaries are published as release assets, not committed
+/ai-guard
+/ai-guard.exe
+/dist/
+
+# editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

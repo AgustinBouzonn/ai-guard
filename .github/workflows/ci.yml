@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - name: Format
+        if: matrix.os == 'ubuntu-latest'
+        run: test -z "$(gofmt -l .)"
+      - name: Vet
+        run: go vet ./...
+      # The tests start real processes: the test binary itself plays the memory hog,
+      # the fake tool and the tier-2 worker, and git is used for the delta.
+      - name: Test
+        run: go test ./... -count=1
+
+  cross-build:
+    name: cross-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      # macOS only compiles: it has no RSS watchdog and no RAM admission (see docs/limitations.md).
+      - name: Build every supported target
+        run: |
+          for target in linux/amd64 linux/arm64 windows/amd64 darwin/amd64 darwin/arm64; do
+            echo "== $target"
+            GOOS="${target%/*}" GOARCH="${target#*/}" go build -o /dev/null ./cmd/ai-guard
+          done

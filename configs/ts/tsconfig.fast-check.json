@@ -1,0 +1,27 @@
+{
+  // Type-check only. Nothing is emitted: transpiling is SWC/esbuild's job (package.scripts.json),
+  // so the checker never blocks a build and can run incrementally from a cache.
+  // AI-Guard picks this file up automatically when it sits next to tsconfig.json.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+
+    // Reuse the previous run: only files whose content (or whose dependencies' types) changed are re-checked.
+    "incremental": true,
+    "tsBuildInfoFile": "./.aiguard/cache/fast-check.tsbuildinfo",
+
+    // Do not re-check the .d.ts files of node_modules on every run.
+    "skipLibCheck": true,
+
+    // Every file must be transpilable on its own. This is what lets SWC/esbuild replace `tsc` for emit.
+    "isolatedModules": true
+
+    // Optional, trades completeness for speed: after an edit, re-check only the files that import the
+    // changed one directly (tier 1's scope). Transitive breakage is then found by the full check in tier 2.
+    // "assumeChangesOnlyAffectDirectDependencies": true
+  }
+}

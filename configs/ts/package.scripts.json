@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "typecheck": "tsc -p tsconfig.fast-check.json",
+    "build": "swc src -d dist --strip-leading-paths --copy-files",
+    "build:esbuild": "esbuild \"src/**/*.ts\" \"src/**/*.tsx\" --outdir=dist --format=esm --platform=node --target=node22 --sourcemap",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist",
+    "check": "ai-guard check",
+    "check:full": "biome lint . && tsc -p tsconfig.json --noEmit && vitest run"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.6",
+    "@swc/cli": "^0.8.2",
+    "@swc/core": "^1.16.22",
+    "@typescript/native-preview": "latest",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.3"
+  }
+}
