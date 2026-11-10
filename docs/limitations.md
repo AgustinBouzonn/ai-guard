@@ -20,9 +20,9 @@ the numbers in [benchmarks.md](benchmarks.md).
 - **cgroup v2.** The hard cap through cgroup v2 is implemented, but only the v1 path was exercised (the
   sandbox is v1). The watchdog does not depend on it.
 - **macOS.** It compiles. There is no RSS watchdog and no RAM admission.
-- **CI.** The workflow in `.github/workflows/ci.yml` passes `actionlint`; the test suite it runs was
-  executed locally on Windows and in a Linux container (see
-  [architecture.md](architecture.md#tests)).
+- **CI.** `.github/workflows/ci.yml` runs `go vet` and the test suite on GitHub's Ubuntu and Windows
+  runners and cross-builds the other targets. It does not run `-race`, and nothing is executed on
+  macOS (see [architecture.md](architecture.md#tests)).
 
 ## Budgets
 
