@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ai-guard",
+            "args": ["hook"],
+            "timeout": 180,
+            "statusMessage": "ai-guard check"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ai-guard",
+            "args": ["hook"],
+            "timeout": 180,
+            "statusMessage": "ai-guard check"
+          }
+        ]
+      }
+    ]
+  }
+}

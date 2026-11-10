@@ -68,6 +68,10 @@ or a blast radius that is too wide: none of these is an error. The step is `DEFE
 `tier2.trigger`, queued remotely. There is no mid-run pause (SIGSTOP): a paused process does not give
 its RSS back, so the "pause" is the admission queue.
 
+**The wait for RAM is spent once per run.** `queue_wait_ms` is one allowance for the whole of tier 1,
+not one per phase. Once static analysis has waited it out, the machine is full: the tests get a single
+attempt and are deferred at once if they still do not fit. A step that does fit still runs.
+
 **Tools are told the limit, they do not just hit it.** Node gets `--max-old-space-size` at 75% of the
 cap. Go binaries (the native TypeScript compiler) get `GOMEMLIMIT` at 90%. Threads per tool = idle cores
 / steps running at once in that phase (`GOMAXPROCS`, `--checkers`, `CARGO_BUILD_JOBS`, `GOFLAGS=-p`,
@@ -127,11 +131,11 @@ PASS  OS hard cap (jobobject) (300 MB hog under a 64 MB cap, watchdog off: kille
 
 ## Code layout
 
-One static Go binary with no dependencies outside the standard library: about 8,300 lines plus 4,700
+One static Go binary with no dependencies outside the standard library: about 8,500 lines plus 5,000
 lines of tests.
 
 ```
-cmd/ai-guard        check, run, doctor, tools, selftest, init, tier2, bench
+cmd/ai-guard        check, run, hook, doctor, tools, selftest, init, tier2, bench
 internal/gitx       delta: git status --porcelain -z (staged, unstaged, untracked), --staged, --since
 internal/lang       classification by extension and project root (FindUp)
 internal/tools      plan: which tool, with which flags, in which directory, for each group of files;
@@ -157,9 +161,9 @@ Results on 2026-11-10 for this revision:
 
 | Platform | Go | Result |
 |---|---|---|
-| Windows 11 (build 26200), amd64 | 1.27.3 | 204 tests pass, `go vet` clean |
-| Linux amd64 (Alpine container) | 1.23.12 | 205 pass, 3 skipped, `go vet` clean |
+| Windows 11 (build 26200), amd64 | 1.27.3 | 218 tests pass, `go vet` clean |
+| Linux amd64 (Alpine container) | 1.23.12 | 219 pass, 3 skipped, `go vet` clean |
 
 The three skips on Linux come from the container, not from the code: it has no Node, no Python and no
-writable memory cgroup, which those tests need. `-race` was run during development on Linux but not
-repeated for this revision.
+writable memory cgroup, which those tests need. CI also runs the suite under the race detector on
+Linux.

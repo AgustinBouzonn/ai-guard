@@ -233,6 +233,51 @@ func TestStepThatNeverGetsRAMIsDeferredWithoutRunning(t *testing.T) {
 	}
 }
 
+// The wait for RAM is one allowance for the whole of tier 1, not one per phase:
+// once static analysis has waited it out, the tests get a single attempt and
+// are deferred at once if the machine is still full.
+func TestWaitForRAMIsSpentOncePerRunNotOncePerPhase(t *testing.T) {
+	h := newHarness(t)
+	h.cfg.QueueWaitMs = 1000
+	h.avail.Store(300) // less than the reserve, whatever a step needs
+	h.step("types", 1, 0, self("touch", h.marker("t1"))...)
+	h.step("tests", 1, 1, self("touch", h.marker("t2"))...)
+	start := time.Now()
+	r := h.run(0)
+	took := time.Since(start)
+	if r.Status != report.Deferred || h.ran("t1") || h.ran("t2") {
+		t.Fatalf("Status = %s, ran = %v/%v; want deferred without starting either tool", r.Status, h.ran("t1"), h.ran("t2"))
+	}
+	if len(r.Deferred) != 2 {
+		t.Errorf("Deferred = %q, want both steps", r.Deferred)
+	}
+	if took < 900*time.Millisecond {
+		t.Errorf("took %v: the run did not wait for RAM at all", took)
+	}
+	if took > 1700*time.Millisecond {
+		t.Errorf("took %v with a 1s allowance: the second phase waited again", took)
+	}
+}
+
+// Spending the allowance does not skip later steps: one that fits right away still runs.
+func TestAfterTheWaitIsSpentAStepThatFitsStillRuns(t *testing.T) {
+	h := newHarness(t)
+	h.avail.Store(8000)
+	h.cfg.Overrides = map[string]config.Override{"types": {MemMB: 60000}, "tests": {MemMB: 64}}
+	h.step("types", 1, 0, self("touch", h.marker("t1"))...)
+	h.step("tests", 1, 1, self("touch", h.marker("t2"))...)
+	r := h.run(0)
+	if r.Status != report.Deferred || h.ran("t1") {
+		t.Fatalf("Status = %s, types ran = %v; want deferred with types never started", r.Status, h.ran("t1"))
+	}
+	if !h.ran("t2") || stepStatus(r, "tests") != "ok" {
+		t.Errorf("tests ran = %v, status = %q; want it admitted on its first attempt", h.ran("t2"), stepStatus(r, "tests"))
+	}
+	if len(r.Deferred) != 1 || !strings.HasPrefix(r.Deferred[0], "types: ") {
+		t.Errorf("Deferred = %q, want only types", r.Deferred)
+	}
+}
+
 func TestTier0TimeoutIsAnInfrastructureError(t *testing.T) {
 	h := newHarness(t)
 	h.step("slow", 0, 0, self("sleep", "60000")...)

@@ -21,8 +21,8 @@ the numbers in [benchmarks.md](benchmarks.md).
   sandbox is v1). The watchdog does not depend on it.
 - **macOS.** It compiles. There is no RSS watchdog and no RAM admission.
 - **CI.** `.github/workflows/ci.yml` runs `go vet` and the test suite on GitHub's Ubuntu and Windows
-  runners and cross-builds the other targets. It does not run `-race`, and nothing is executed on
-  macOS (see [architecture.md](architecture.md#tests)).
+  runners (on Ubuntu also under the race detector) and cross-builds the other targets. Nothing is
+  executed on macOS (see [architecture.md](architecture.md#tests)).
 
 ## Budgets
 
@@ -31,6 +31,15 @@ the numbers in [benchmarks.md](benchmarks.md).
   2.3 GB cold is killed and deferred: there you need `overrides` or tier 2.
 - **`ai-guard doctor`** takes about 10 s in a repository with 3,000 source files on Windows, because it
   plans all of them.
+
+## The Claude Code hook
+
+- **Not exercised inside a live session.** `ai-guard hook` was tested by piping it the events Claude
+  Code documents, against real repositories. It has not been observed firing from Claude Code itself.
+- **Subagents in worktrees.** The Claude Code documentation does not say which directory a
+  `SubagentStop` event reports for a subagent isolated in a worktree. If it is the session's directory,
+  the hook does not check that subagent (it never over-blocks); the agent instructions still apply.
+- **Untracked files are fingerprinted by size and modification time**, not by content.
 
 ## Tier 2
 

@@ -5,6 +5,8 @@
 ```
 ai-guard [check] [flags] [files...]   validate changed files (default command)
 ai-guard run [flags] -- cmd args...   run any command inside a memory/time budget
+ai-guard hook [check flags]           Claude Code Stop/SubagentStop hook: check the delta when
+                                      a turn ends and hand the errors back to the agent
 ai-guard doctor                       show machine limits and the tools that would run
 ai-guard tools [install] [--dir DIR]  show or install the tools ai-guard can bring itself
                                       (the native TypeScript compiler, via npm)
@@ -55,6 +57,45 @@ ai-guard run --mem 2000 --dir apps/api --shell "pnpm typecheck && pnpm lint"
 | `--dir DIR` | working directory |
 
 The exit status is the command's own; `137` when it was killed for memory, `124` for time.
+
+### `hook`
+
+A [Claude Code hook](https://code.claude.com/docs/en/hooks) for the `Stop` and `SubagentStop` events. It
+reads the event from stdin, runs `check` on the git delta of the event's directory, and answers the
+way Claude Code expects:
+
+| `check` result | What the hook does |
+|---|---|
+| `OK` | exits `0` and remembers the delta |
+| `FAIL` (errors in the code) | exits `2` with the report on stderr: Claude Code blocks the end of the turn and gives the report to the model |
+| `DEFERRED` | exits `0` and prints a `systemMessage` naming the checks that were not validated |
+| a tool could not run, or bad config | exits `0` and prints a `systemMessage`: it is not an error in the change |
+
+It is built not to get in the way:
+
+- **A delta that already passed is not checked again.** The hook stores a fingerprint of the
+  uncommitted state in `.aiguard/hook-last-ok`. A turn that edits nothing costs a `git status`.
+- **A clean tree, or a directory outside a repository, is a silent exit `0`.**
+- **A subagent is only checked in a working tree of its own** (an isolated worktree). If it shares the
+  session's tree, that tree is checked by the session's own `Stop` hook; blocking the subagent would
+  set it to fixing work in progress that is not its own.
+- **`AI_GUARD_HOOK=off`** switches it off.
+
+Any `check` flag can follow: `ai-guard hook --disable ts.test` validates types but leaves the tests to
+an explicit `ai-guard check`.
+
+To install it, merge [`configs/agents/claude-hook.settings.json`](../configs/agents/claude-hook.settings.json)
+into the project's `.claude/settings.json`. Each event gets this entry:
+
+```json
+{ "type": "command", "command": "ai-guard", "args": ["hook"], "timeout": 180 }
+```
+
+Claude Code ends the loop by itself after eight blocks in a row. If some people on the team do not
+have the binary, Claude Code reports a hook that could not start on every turn and carries on; wrap
+the call in a script that checks for the binary first if that noise matters.
+
+To try it by hand: `echo '{"hook_event_name":"Stop"}' | ai-guard hook; echo $?`
 
 ### `doctor`, `selftest`, `tools`
 
@@ -110,9 +151,14 @@ each step.
 
 ## Wiring it into an agent
 
-Paste [`configs/agents/AGENTS.snippet.md`](../configs/agents/AGENTS.snippet.md) into your `AGENTS.md`
-or `CLAUDE.md`. It tells the agent to run `ai-guard check` after every batch of edits, how to read each
-exit code, and not to run the project's full lint, type-check, build or test commands itself.
+There are two ways, and they work together:
+
+- **Instructions.** Paste [`configs/agents/AGENTS.snippet.md`](../configs/agents/AGENTS.snippet.md) into
+  your `AGENTS.md` or `CLAUDE.md`. It tells the agent to run `ai-guard check` after every batch of
+  edits, how to read each exit code, and not to run the project's full lint, type-check, build or test
+  commands itself. This works with any agent, and depends on the agent following it.
+- **A hook.** With Claude Code, [`ai-guard hook`](#hook) runs the check when a turn ends, whether or not
+  the agent remembered to.
 
 ## Configuration
 
