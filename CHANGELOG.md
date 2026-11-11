@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0 - 2026-11-10
+
+Changes made after wiring 0.2.0 into a team repository and watching it on a machine that was out of
+RAM.
+
+### Added
+
+- **`ai-guard hook`**: a Claude Code `Stop` / `SubagentStop` hook. When a turn ends it checks the git
+  delta and, if the code has errors, blocks the turn and hands the report to the agent. Deferred checks
+  and tools that could not run are reported to the person and do not block. A delta that already passed
+  is not checked again, and a subagent is only checked in a working tree of its own. Settings snippet in
+  `configs/agents/claude-hook.settings.json`.
+
+### Changed
+
+- **The wait for RAM is spent once per run, not once per phase.** On a machine with no RAM to spare,
+  0.2.0 waited `queue_wait_ms` for the type-check and then again for the tests: 30 s to reach
+  `DEFERRED`. Now the second phase gets a single attempt.
+
 ## 0.2.0 - 2026-11-10
 
 Changes made after measuring 0.1.0 on a real monorepo. With the 0.1.0 defaults, the type-check of a

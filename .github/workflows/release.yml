@@ -1,0 +1,48 @@
+name: release
+
+# Pushing a tag vX.Y.Z builds the binaries and publishes them as a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - name: The tag must match the version in the source
+        run: |
+          want="v$(sed -n 's/^const version = "\(.*\)"$/\1/p' cmd/ai-guard/main.go)"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "tag is $GITHUB_REF_NAME but cmd/ai-guard/main.go says $want" >&2
+            exit 1
+          fi
+      - name: Test
+        run: go test ./... -count=1
+      # macOS is left out on purpose: it compiles, but has no RSS watchdog and no RAM admission.
+      - name: Build
+        run: |
+          mkdir dist
+          for target in linux/amd64 linux/arm64 windows/amd64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            ext=""
+            if [ "$os" = windows ]; then ext=".exe"; fi
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" \
+              -o "dist/ai-guard-$os-$arch$ext" ./cmd/ai-guard
+          done
+          cd dist && sha256sum ai-guard-* > SHA256SUMS && cat SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag \
+            --title "AI-Guard ${GITHUB_REF_NAME#v}" \
+            --notes "Changes: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md"

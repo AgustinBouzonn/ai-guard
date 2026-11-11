@@ -25,13 +25,15 @@ import (
 	"github.com/AgustinBouzonn/ai-guard/internal/tools"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 const usage = `ai-guard ` + version + ` - tiered validation for AI-generated code
 
 usage:
   ai-guard [check] [flags] [files...]   validate changed files (default command)
   ai-guard run [flags] -- cmd args...   run any command inside a memory/time budget
+  ai-guard hook [check flags]           Claude Code Stop/SubagentStop hook: check the delta when
+                                        a turn ends and hand the errors back to the agent
   ai-guard doctor                       show machine limits and the tools that would run
   ai-guard tools [install] [--dir DIR]  show or install the tools ai-guard can bring itself
                                         (the native TypeScript compiler, via npm)
@@ -73,7 +75,7 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 	cmd := "check"
 	if len(args) > 0 {
 		switch args[0] {
-		case "check", "run", "doctor", "tools", "selftest", "init", "tier2", "bench", "version", "help", "__hog", "__sleep", "__tree", "__tier2-job":
+		case "check", "run", "hook", "doctor", "tools", "selftest", "init", "tier2", "bench", "version", "help", "__hog", "__sleep", "__tree", "__tier2-job":
 			cmd, args = args[0], args[1:]
 		case "-h", "--help", "-help":
 			cmd = "help"
@@ -89,6 +91,8 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 		return cmdCheck(args, stdout, stderr)
 	case "run":
 		return cmdRun(args, stdout, stderr)
+	case "hook":
+		return cmdHook(args, stdout, stderr)
 	case "doctor":
 		return cmdDoctor(args, stdout, stderr)
 	case "tools":

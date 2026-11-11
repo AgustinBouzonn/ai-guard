@@ -200,3 +200,58 @@ func TestChangedNeverRewritesTheIndex(t *testing.T) {
 		t.Error("Changed rewrote .git/index (it must run git with --no-optional-locks)")
 	}
 }
+
+func TestFingerprintFollowsTheUncommittedState(t *testing.T) {
+	root := repo(t)
+	if fp, clean, err := Fingerprint(root); err != nil || !clean || fp != "" {
+		t.Fatalf("clean tree: fp %q, clean %v, err %v; want an empty fingerprint and clean", fp, clean, err)
+	}
+
+	write(t, root, "src/edit.ts", "export const b = 2;\n")
+	first, clean, err := Fingerprint(root)
+	if err != nil || clean || len(first) != 64 {
+		t.Fatalf("edited tree: fp %q, clean %v, err %v; want a sha256 and not clean", first, clean, err)
+	}
+	if again, _, _ := Fingerprint(root); again != first {
+		t.Errorf("nothing changed, but the fingerprint went from %s to %s", first, again)
+	}
+
+	// Same file, same status line, different content.
+	write(t, root, "src/edit.ts", "export const b = 3;\n")
+	second, _, _ := Fingerprint(root)
+	if second == first {
+		t.Error("a second edit to the same file left the fingerprint unchanged")
+	}
+
+	// Staging moves the change in the status without touching the content.
+	git(t, root, "add", "src/edit.ts")
+	if staged, _, _ := Fingerprint(root); staged == second {
+		t.Error("staging the file left the fingerprint unchanged")
+	}
+}
+
+func TestFingerprintSeesUntrackedFilesAndTheirContent(t *testing.T) {
+	root := repo(t)
+	write(t, root, "src/new.ts", "export const n = 1;\n")
+	first, clean, err := Fingerprint(root)
+	if err != nil || clean {
+		t.Fatalf("untracked file: clean %v, err %v; want not clean", clean, err)
+	}
+	// git reports the same "?? src/new.ts" for any content; size tells them apart.
+	write(t, root, "src/new.ts", "export const n = 12345;\n")
+	if second, _, _ := Fingerprint(root); second == first {
+		t.Error("rewriting an untracked file left the fingerprint unchanged")
+	}
+}
+
+func TestFingerprintWorksBeforeTheFirstCommit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	root := t.TempDir()
+	git(t, root, "init", "-q", "-b", "main")
+	write(t, root, "a.ts", "export const a = 1;\n")
+	if fp, clean, err := Fingerprint(root); err != nil || clean || fp == "" {
+		t.Errorf("fp %q, clean %v, err %v; want a fingerprint for the untracked file", fp, clean, err)
+	}
+}

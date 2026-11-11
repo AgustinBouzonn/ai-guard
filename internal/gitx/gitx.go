@@ -3,6 +3,8 @@ package gitx
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -123,6 +125,41 @@ func Changed(root string, o Options) ([]string, error) {
 	}
 	sort.Strings(files)
 	return files, nil
+}
+
+// Fingerprint identifies the uncommitted state of the working tree: what
+// differs from HEAD, staged or not, plus every untracked file. Two calls
+// return the same value only if nothing was edited in between, so a check
+// that passed for a fingerprint need not run again. clean is true when there
+// is nothing uncommitted at all.
+func Fingerprint(root string) (fp string, clean bool, err error) {
+	status, err := run(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		return "", false, err
+	}
+	if len(status) == 0 {
+		return "", true, nil
+	}
+	h := sha256.New()
+	part := func(b []byte) { // length-prefixed, so parts cannot run into each other
+		fmt.Fprintf(h, "%d\x00", len(b))
+		h.Write(b)
+	}
+	part(status)
+	// Content of everything tracked. No HEAD yet (a repository without
+	// commits) leaves this empty: the status above still covers the names.
+	diff, _ := run(root, "diff", "HEAD", "--no-ext-diff")
+	part(diff)
+	untracked, _ := run(root, "ls-files", "--others", "--exclude-standard", "-z")
+	for _, p := range splitZ(untracked) {
+		// Size and modification time stand in for the content of files git does not track.
+		if fi, err := os.Lstat(filepath.Join(root, filepath.FromSlash(p))); err == nil {
+			part([]byte(fmt.Sprintf("%s\x00%d\x00%d", p, fi.Size(), fi.ModTime().UnixNano())))
+		} else {
+			part([]byte(p))
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), false, nil
 }
 
 // Tracked lists up to limit tracked files (repository-relative slash paths).

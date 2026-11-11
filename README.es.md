@@ -123,14 +123,17 @@ ai-guard doctor          RAM/CPU que ve el scheduler y qué herramienta correrí
 ai-guard tools install   baja el compilador nativo de TypeScript a una carpeta propia
 ai-guard check           delta de git -> nivel 0 -> nivel 1 -> (nivel 2)
 ai-guard run --mem MB --timeout S -- cmd...    cualquier comando, contenido
+ai-guard hook            hook de Claude Code: valida el delta al terminar cada turno
 ```
 
 Códigos de salida de `check`: `0` pasa, `1` hay errores en el código, `2` uso o config inválidos, `3`
 un check no pudo completarse, `4` nada falló pero algo se difirió al nivel 2.
 
 Para que un agente lo use, pegá [`configs/agents/AGENTS.snippet.md`](configs/agents/AGENTS.snippet.md)
-en tu `AGENTS.md` o `CLAUDE.md`. No hace falta archivo de configuración; `aiguard.json` sólo lleva lo
-que difiere de los valores por defecto.
+en tu `AGENTS.md` o `CLAUDE.md`. Con Claude Code además se puede automatizar: `ai-guard hook` corre el
+check al terminar cada turno y le devuelve los errores al agente (ver
+[docs/usage.md](docs/usage.md#hook)). No hace falta archivo de configuración; `aiguard.json` sólo lleva
+lo que difiere de los valores por defecto.
 
 ## Cómo funciona
 
@@ -192,7 +195,7 @@ La documentación técnica está en inglés.
 
 ## Estado y límites
 
-Versión 0.2.0. Los límites principales:
+Versión 0.3.0. Los límites principales:
 
 - Los números del proyecto real salen de un paquete de un repositorio, con corridas únicas.
 - En macOS sólo compila: no tiene watchdog de RSS ni admisión por RAM.
@@ -211,7 +214,7 @@ go test ./...
 
 Los tests usan procesos reales: el propio binario de test hace de proceso que consume memoria, de
 herramienta falsa y de worker del nivel 2, y git real provee el delta. El 2026-11-10 esta revisión pasó
-204 tests en Windows 11 (Go 1.27.3) y 205 en Linux (Go 1.23.12, 3 omitidos porque el contenedor no
+218 tests en Windows 11 (Go 1.27.3) y 219 en Linux (Go 1.23.12, 3 omitidos porque el contenedor no
 tiene Node, Python ni un cgroup escribible).
 
 ## Licencia

@@ -57,6 +57,10 @@ type run struct {
 	o    Options
 	cfg  *config.Config
 	hist *stats.Book // what each step cost in earlier runs; nil = not learning
+	// memWait is how long a tier-1 step may still wait for RAM. It is one
+	// allowance for the whole run: once a phase has waited it out, the machine
+	// is full, and later phases get a single attempt instead of another wait.
+	memWait time.Duration
 }
 
 // Run executes the pipeline and returns the verdict.
@@ -68,7 +72,7 @@ func Run(ctx context.Context, o Options) report.Result {
 	if o.NumCPU < 1 {
 		o.NumCPU = runtime.NumCPU()
 	}
-	p := &run{o: o, cfg: o.Cfg}
+	p := &run{o: o, cfg: o.Cfg, memWait: time.Duration(o.Cfg.QueueWaitMs) * time.Millisecond}
 	if o.Env.CacheDir != "" {
 		p.hist = stats.Load(filepath.Join(o.Env.CacheDir, "stats.json"))
 		defer p.hist.Save() // best effort: a lost sample only costs a guess
@@ -288,7 +292,8 @@ func (p *run) runBatch(ctx context.Context, steps []*tools.Step, tier int, gate 
 	if tier >= 1 {
 		go p.guard(ctx, lives)
 	}
-	wait := time.Duration(p.cfg.QueueWaitMs) * time.Millisecond
+	wait := p.memWait
+	var starved atomic.Bool // a step waited the allowance out and never got its RAM
 	var wg sync.WaitGroup
 	for i, s := range steps {
 		wg.Add(1)
@@ -300,6 +305,7 @@ func (p *run) runBatch(ctx context.Context, steps []*tools.Step, tier int, gate 
 			tk, err := gate.Acquire(ctx, needMB, wait)
 			switch {
 			case errors.Is(err, sched.ErrNoMemory):
+				starved.Store(true)
 				outs[i].rec.Status = "deferred"
 				outs[i].deferred = fmt.Sprintf("%s: no free RAM for its %dMB budget", s.ID, needMB)
 				return
@@ -331,6 +337,9 @@ func (p *run) runBatch(ctx context.Context, steps []*tools.Step, tier int, gate 
 		}(i, s)
 	}
 	wg.Wait()
+	if starved.Load() {
+		p.memWait = 0
+	}
 	return outs
 }
 

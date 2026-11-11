@@ -83,3 +83,4 @@ Every file in `configs/` was run with the tool it configures. The last column sa
 | `tier2/ai-guard-tier2.yml` | `.github/workflows/` | tier-2 workflow | `actionlint` 1.7.12; **not executed on GitHub** |
 | `tier2/remote-worker.sh` | the repo's `ci/` | worker for a machine reached over SSH | executed end to end against a local git remote |
 | `agents/AGENTS.snippet.md` | `AGENTS.md` / `CLAUDE.md` | instructions for the agent | — |
+| `agents/claude-hook.settings.json` | merge into `.claude/settings.json` | runs `ai-guard hook` on `Stop` and `SubagentStop` | the command was piped real events against a pnpm monorepo; **not exercised inside a live Claude Code session** |

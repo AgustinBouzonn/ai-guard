@@ -109,6 +109,23 @@ One run each, same change (`ts.test_args` in `aiguard.json`):
 `--no-isolate` shares modules between test files. It passed on these 8 files, but it can break tests
 that rely on isolation (mocks, module state). It is not the default.
 
+### On a machine that is out of RAM
+
+The same repository on the same laptop, with 3 GB free of 32 and the CPU at 100% (2026-11-10). A type
+error was injected. Tier 1 could not be admitted, so only the syntax was validated:
+
+| Version | Result | Time until the verdict |
+|---|---|---:|
+| 0.2.0 | `DEFERRED`: `ts.types` and `ts.test`, "no free RAM for its 2005MB budget" | 30.1 s |
+
+0.2.0 waited `queue_wait_ms` (15 s) once for the type-check and again for the tests. From 0.3.0 the
+allowance is spent once per run, so the same situation ends after the first 15 s. That is covered by
+a test with a simulated machine. **It was not re-measured on the laptop**, which had 8 GB free by the
+time 0.3.0 was built.
+
+With 8 GB free the injected type error is caught: 21.2 s cold (the first type-check of that worktree,
+peak 2.5 GB) and 3.7 s warm (peak 0.5 GB).
+
 ### What this does not solve
 
 - **The integration suite** (`test:int`, 135 files run serially against PostgreSQL). In the
